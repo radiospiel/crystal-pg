@@ -155,7 +155,7 @@ module PG
       param_values = encoded_params.map &.to_unsafe
       param_lengths = encoded_params.map &.size
       param_formats = encoded_params.map &.format
-      result_format = 1 # text vs. binary
+      result_format = 0 # 0: text, 1: binary
 
       ret = LibPQ.send_query_params(
         conn_ptr,
