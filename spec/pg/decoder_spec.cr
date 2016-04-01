@@ -35,6 +35,8 @@ describe PG::Decoder do
 
   test_decode "money", "'$1,234.56'::money", 1234.56
 
+  test_decode "xml", "'<foo>bar</foo>'::xml", "<foo>bar</foo>"
+
   if Helper.db_version_gte(9, 2)
     test_decode "json", %('[1,"a",true]'::json), JSON.parse(%([1,"a",true]))
     test_decode "json", %('{"a":1}'::json), JSON.parse(%({"a":1}))
