@@ -94,12 +94,6 @@ module PG
       end
     end
 
-    class JsonbDecoder < Decoder
-      def decode_string(s)
-        JSON.parse(s)
-      end
-    end
-
     class DateDecoder < Decoder
       def decode_string(s)
         unless s =~ /^(\d+)-(\d+)-(\d+)$/
@@ -199,3 +193,5 @@ module PG
     register_decoder UuidDecoder.new, 2950   # uuid
   end
 end
+
+    register_decoder JsonDecoder.new, 3802   # jsonb
