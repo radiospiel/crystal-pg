@@ -145,7 +145,7 @@ module PG
       end
 
       def decode(bytes)
-        # assume "\\x", then start
+        # assume "\\x", then start conversion of 2 hexchars into a single byte
         bytes += 2
         r = [] of UInt8
 
@@ -163,12 +163,12 @@ module PG
 
     @@decoders = Hash(Int32, PG::Decoder::Decoder).new(DefaultDecoder.new)
 
-    def self.from_oid(oid)
-      @@decoders[oid]
-    end
-
     def self.register_decoder(decoder, oid)
       @@decoders[oid] = decoder
+    end
+
+    def self.decode(oid, slice)
+      @@decoders[oid].decode(slice)
     end
 
     # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.h
