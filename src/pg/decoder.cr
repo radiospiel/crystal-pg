@@ -13,12 +13,12 @@ module PG
 
   module Decoder
     abstract class Decoder
-      def decode_string(s)
+      def decode(s : String)
         s
       end
 
       def decode(oid, bytes)
-        decode_string String.new(bytes)
+        decode String.new(bytes)
       end
     end
 
@@ -36,32 +36,32 @@ module PG
     end
 
     class BoolDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s == "t"
       end
     end
 
     class Int2Decoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s.to_i
       end
     end
 
     class IntDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s.to_i
       end
     end
 
     class Int8Decoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s.to_i
       end
     end
 
     class MoneyDecoder < Decoder
       # byte swapped in the same way as int4
-      def decode_string(s)
+      def decode(s : String)
         warn_once "converting a money value with an arbitrary precision into a float64, potentially losing accuracy"
         s = s.gsub(/[$,]/, "")
         s.to_f64
@@ -70,32 +70,32 @@ module PG
 
     class Float32Decoder < Decoder
       # byte swapped in the same way as int4
-      def decode_string(s)
+      def decode(s : String)
         s.to_f32
       end
     end
 
     class Float64Decoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s.to_f
       end
     end
 
     class NumericDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         warn_once "converting a numeric value with an arbitrary precision into a float64, potentially losing accuracy"
         s.to_f
       end
     end
 
     class JsonDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         JSON.parse(s)
       end
     end
 
     class DateDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         unless s =~ /^(\d+)-(\d+)-(\d+)$/
           raise ArgumentError.new("Cannot parse date string: #{s.inspect}")
         end
@@ -106,7 +106,7 @@ module PG
     end
 
     class TimeDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         unless s =~ /^(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)(?:(\.\d+))?([+-]\d+)?$/
           raise ArgumentError.new("Cannot parse time string: #{s.inspect}")
         end
@@ -123,7 +123,7 @@ module PG
     end
 
     class UuidDecoder < Decoder
-      def decode_string(s)
+      def decode(s : String)
         s
       end
     end
@@ -196,7 +196,7 @@ module PG
     register_decoder TimeDecoder.new, 1114   # timestamp
     register_decoder TimeDecoder.new, 1184   # timestamptz
     register_decoder UuidDecoder.new, 2950   # uuid
-  end
-end
 
     register_decoder JsonDecoder.new, 3802   # jsonb
+  end
+end
