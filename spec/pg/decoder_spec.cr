@@ -56,4 +56,8 @@ describe PG::Decoder do
 
   test_decode "date", "'2015-02-03'::date",
     Time.new(2015, 2, 3, 0, 0, 0, 0, Time::Kind::Utc)
+
+  test_decode("cidr", "'192.168.1'::cidr", "192.168.1.0/24")
+  test_decode("inet", "'192.168.1.1'::inet", "192.168.1.1")
+  test_decode("macaddr", "'08:00:2b:01:02:03'::macaddr", "08:00:2b:01:02:03")
 end

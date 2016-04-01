@@ -184,6 +184,11 @@ module PG
     register_decoder StringDecoder.new, 142  # xml
     register_decoder Float32Decoder.new, 700 # float4
     register_decoder Float64Decoder.new, 701 # float8
+
+    register_decoder StringDecoder.new, 829  # macaddr
+    register_decoder StringDecoder.new, 869  # inet
+    register_decoder StringDecoder.new, 650  # cidr
+
     register_decoder NumericDecoder.new, 1700 # numeric
     register_decoder MoneyDecoder.new, 790   # money
     register_decoder DefaultDecoder.new, 705 # unknown
