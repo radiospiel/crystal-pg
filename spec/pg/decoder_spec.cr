@@ -33,6 +33,8 @@ describe PG::Decoder do
   test_decode "uuid", "'7d61d548124c4b38bc05cfbb88cfd1d1'::uuid", "7d61d548-124c-4b38-bc05-cfbb88cfd1d1"
   test_decode "uuid", "'7d61d548-124c-4b38-bc05-cfbb88cfd1d1'::uuid", "7d61d548-124c-4b38-bc05-cfbb88cfd1d1"
 
+  test_decode "money", "'$1,234.56'::money", 1234.56
+
   if Helper.db_version_gte(9, 2)
     test_decode "json", %('[1,"a",true]'::json), JSON.parse(%([1,"a",true]))
     test_decode "json", %('{"a":1}'::json), JSON.parse(%({"a":1}))

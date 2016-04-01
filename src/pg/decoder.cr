@@ -52,6 +52,15 @@ module PG
       end
     end
 
+    class MoneyDecoder < Decoder
+      # byte swapped in the same way as int4
+      def decode_string(s)
+        warn_once "converting a money value with an arbitrary resolution into a float, potentially losing accuracy"
+        s = s.gsub(/[$,]/, "")
+        s.to_f64
+      end
+    end
+
     class Float32Decoder < Decoder
       # byte swapped in the same way as int4
       def decode_string(s)
@@ -174,6 +183,7 @@ module PG
     register_decoder Float32Decoder.new, 700 # float4
     register_decoder Float64Decoder.new, 701 # float8
     register_decoder NumericDecoder.new, 1700 # numeric
+    register_decoder MoneyDecoder.new, 790   # money
     register_decoder DefaultDecoder.new, 705 # unknown
     register_decoder DateDecoder.new, 1082   # date
     register_decoder TimeDecoder.new, 1114   # timestamp
