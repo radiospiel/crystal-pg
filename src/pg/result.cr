@@ -26,7 +26,7 @@ module PG
       end
     end
 
-    def initialize(@types : T, @res)
+    def initialize(@types : T, @res, @result_format)
     end
 
     def finalize
@@ -99,7 +99,11 @@ module PG
         nil
       else
         size = LibPQ.getlength(res, row, col)
-        PG::Decoder.decode(fields[col].oid, val_ptr.to_slice(size))
+        if @result_format == :text
+          PG::TextDecoder.decode(fields[col].oid, val_ptr.to_slice(size))
+        else
+          PG::Decoder.decode(fields[col].oid, val_ptr.to_slice(size))
+        end
       end
     end
   end

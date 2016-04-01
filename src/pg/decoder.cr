@@ -1,175 +1,158 @@
 require "json"
 
-$warned = Hash(String, Bool).new(false)
-def warn_once(s)
-  unless $warned[s]
-    $warned[s] = true
-    STDERR.puts(s)
-  end
-end
-
 module PG
-  alias PGValue = String | Nil | Bool | Int32 | Float32 | Float64 | Time | JSON::Type
-
   module Decoder
     abstract class Decoder
-      def decode(s : String)
-        s
+      abstract def decode(bytes)
+
+      private def swap16(slice : Slice(UInt8))
+        swap16(slice.pointer(0))
       end
 
-      def decode(oid, bytes)
-        decode String.new(bytes)
+      private def swap16(ptr : UInt8*) : UInt16
+        ((((0_u16
+          ) | ptr[0]) << 8
+          ) | ptr[1])
       end
-    end
 
-    class StringDecoder < Decoder
-      def decode(oid, bytes)
-        String.new(bytes)
+      private def swap32(slice : Slice(UInt8))
+        swap32(slice.pointer(0))
+      end
+
+      private def swap32(ptr : UInt8*) : UInt32
+        ((((((((0_u32
+          ) | ptr[0]) << 8
+          ) | ptr[1]) << 8
+          ) | ptr[2]) << 8
+          ) | ptr[3])
+      end
+
+      private def swap64(slice : Slice(UInt8))
+        swap64(slice.pointer(0))
+      end
+
+      private def swap64(ptr : UInt8*) : UInt64
+        ((((((((((((((((0_u64
+          ) | ptr[0]) << 8
+          ) | ptr[1]) << 8
+          ) | ptr[2]) << 8
+          ) | ptr[3]) << 8
+          ) | ptr[4]) << 8
+          ) | ptr[5]) << 8
+          ) | ptr[6]) << 8
+          ) | ptr[7])
       end
     end
 
     class DefaultDecoder < Decoder
-      def decode(oid, bytes)
-        warn_once "Decoding input for oid #{oid} with DefaultDecoder"
+      def decode(bytes)
         String.new(bytes)
       end
     end
 
     class BoolDecoder < Decoder
-      def decode(s : String)
-        s == "t"
+      def decode(bytes)
+        case bytes[0]
+        when 0
+          false
+        when 1
+          true
+        else
+          raise "bad boolean decode: #{bytes[0]}"
+        end
       end
     end
 
     class Int2Decoder < Decoder
-      def decode(s : String)
-        s.to_i
+      def decode(bytes)
+        swap16(bytes).to_i16
       end
     end
 
     class IntDecoder < Decoder
-      def decode(s : String)
-        s.to_i
+      def decode(bytes)
+        swap32(bytes).to_i32
       end
     end
 
     class Int8Decoder < Decoder
-      def decode(s : String)
-        s.to_i
-      end
-    end
-
-    class MoneyDecoder < Decoder
-      # byte swapped in the same way as int4
-      def decode(s : String)
-        warn_once "converting a money value with an arbitrary precision into a float64, potentially losing accuracy"
-        s = s.gsub(/[$,]/, "")
-        s.to_f64
+      def decode(bytes)
+        swap64(bytes).to_i64
       end
     end
 
     class Float32Decoder < Decoder
       # byte swapped in the same way as int4
-      def decode(s : String)
-        s.to_f32
+      def decode(bytes)
+        u32 = swap32(bytes)
+        (pointerof(u32) as Float32*).value
       end
     end
 
     class Float64Decoder < Decoder
-      def decode(s : String)
-        s.to_f
-      end
-    end
-
-    class NumericDecoder < Decoder
-      def decode(s : String)
-        warn_once "converting a numeric value with an arbitrary precision into a float64, potentially losing accuracy"
-        s.to_f
+      def decode(bytes)
+        u64 = swap64(bytes)
+        (pointerof(u64) as Float64*).value
       end
     end
 
     class JsonDecoder < Decoder
-      def decode(s : String)
-        JSON.parse(s)
+      def decode(bytes)
+        JSON.parse(String.new(bytes))
       end
     end
 
-    class DateDecoder < Decoder
-      def decode(s : String)
-        unless s =~ /^(\d+)-(\d+)-(\d+)$/
-          raise ArgumentError.new("Cannot parse date string: #{s.inspect}")
-        end
+    class JsonbDecoder < Decoder
+      def decode(bytes)
+        # move past single 0x01 byte at the start of jsonb
+        JSON.parse(String.new(bytes + 1))
+      end
+    end
 
-        year, mon, day = $1, $2, $3
-        Time.new(year.to_i, mon.to_i, day.to_i, 0, 0, 0, 0, Time::Kind::Utc)
+    JAN_1_2K_TICKS = Time.new(2000, 1, 1, kind: Time::Kind::Utc).ticks
+
+    class DateDecoder < Decoder
+      def decode(bytes)
+        v = swap32(bytes).to_i32
+        Time.new(JAN_1_2K_TICKS + (Time::Span::TicksPerDay * v), kind: Time::Kind::Utc)
       end
     end
 
     class TimeDecoder < Decoder
-      def decode(s : String)
-        unless s =~ /^(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)(?:(\.\d+))?([+-]\d+)?$/
-          raise ArgumentError.new("Cannot parse time string: #{s.inspect}")
-        end
-
-        year, mon, day = $1, $2, $3
-        hour, mins, secs, msecs = $4, $5, $6, ($7? || '0')
-
-        offset = $8?
-
-        time = Time.new(year.to_i, mon.to_i, day.to_i, hour.to_i, mins.to_i, secs.to_i, (1000 * ("" + msecs).to_f), Time::Kind::Utc)
-        time -= offset.to_i.hours if offset
-        time
+      def decode(bytes)
+        v = swap64(bytes).to_i64 / 1000
+        Time.new(JAN_1_2K_TICKS + (Time::Span::TicksPerMillisecond * v), kind: Time::Kind::Utc)
       end
     end
 
     class UuidDecoder < Decoder
-      def decode(s : String)
-        s
+      def decode(bytes)
+        String.new(36) do |buffer|
+          buffer[8] = buffer[13] = buffer[18] = buffer[23] = 45_u8
+          bytes[0, 4].hexstring(buffer + 0)
+          bytes[4, 2].hexstring(buffer + 9)
+          bytes[6, 2].hexstring(buffer + 14)
+          bytes[8, 2].hexstring(buffer + 19)
+          bytes[10, 6].hexstring(buffer + 24)
+          {36, 36}
+        end
       end
     end
 
     class ByteaDecoder < Decoder
-      NULL_CHAR = '0'.ord
-      A_CHAR = 'A'.ord
-      LOWER_A_CHAR = 'a'.ord
-
-      def hexchar2num(ch)
-        if ch < (NULL_CHAR + 10)
-          ch - NULL_CHAR
-        elsif ch < A_CHAR + 6
-          ch - A_CHAR + 10
-        elsif ch < LOWER_A_CHAR + 6
-          ch - LOWER_A_CHAR + 10
-        else
-          raise ArgumentError.new
-        end
-      end
-
-      def decode(oid, bytes)
-        # assume "\\x", then start conversion of 2 hexchars into a single byte
-        bytes += 2
-        r = [] of UInt8
-
-        while bytes.size > 1
-          b0 = bytes[0]
-          b1 = bytes[1]
-
-          r << hexchar2num(b0) * 16 + hexchar2num(b1)
-          bytes += 2
-        end
-
-        r
+      def decode(bytes)
+        bytes
       end
     end
 
-    @@decoders = Hash(Int32, PG::Decoder::Decoder).new(DefaultDecoder.new)
+    @@decoders = Hash(Int32, Decoder).new(DefaultDecoder.new)
 
     def self.register_decoder(decoder, oid)
       @@decoders[oid] = decoder
     end
 
     def self.decode(oid, slice)
-      @@decoders[oid].decode(oid, slice)
+      @@decoders[oid].decode(slice)
     end
 
     # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.h
@@ -178,25 +161,15 @@ module PG
     register_decoder Int8Decoder.new, 20     # int8 (bigint)
     register_decoder Int2Decoder.new, 21     # int2 (smallint)
     register_decoder IntDecoder.new, 23      # int4 (integer)
-    register_decoder StringDecoder.new, 25   # text
-
+    register_decoder DefaultDecoder.new, 25  # text
     register_decoder JsonDecoder.new, 114    # json
-    register_decoder StringDecoder.new, 142  # xml
+    register_decoder JsonbDecoder.new, 3802  # jsonb
     register_decoder Float32Decoder.new, 700 # float4
     register_decoder Float64Decoder.new, 701 # float8
-
-    register_decoder StringDecoder.new, 829  # macaddr
-    register_decoder StringDecoder.new, 869  # inet
-    register_decoder StringDecoder.new, 650  # cidr
-
-    register_decoder NumericDecoder.new, 1700 # numeric
-    register_decoder MoneyDecoder.new, 790   # money
     register_decoder DefaultDecoder.new, 705 # unknown
     register_decoder DateDecoder.new, 1082   # date
     register_decoder TimeDecoder.new, 1114   # timestamp
     register_decoder TimeDecoder.new, 1184   # timestamptz
     register_decoder UuidDecoder.new, 2950   # uuid
-
-    register_decoder JsonDecoder.new, 3802   # jsonb
   end
 end
