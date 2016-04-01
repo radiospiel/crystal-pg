@@ -1,5 +1,13 @@
 require "json"
 
+$warned = Hash(String, Bool).new(false)
+def warn_once(s)
+  unless $warned[s]
+    $warned[s] = true
+    STDERR.puts(s)
+  end
+end
+
 module PG
   alias PGValue = String | Nil | Bool | Int32 | Float32 | Float64 | Time | JSON::Type
 
@@ -53,6 +61,13 @@ module PG
 
     class Float64Decoder < Decoder
       def decode_string(s)
+        s.to_f
+      end
+    end
+
+    class NumericDecoder < Decoder
+      def decode_string(s)
+        warn_once "converting a numeric value with an arbitrary resolution into a float, potentially losing accuracy"
         s.to_f
       end
     end
@@ -158,6 +173,7 @@ module PG
     register_decoder JsonbDecoder.new, 3802  # jsonb
     register_decoder Float32Decoder.new, 700 # float4
     register_decoder Float64Decoder.new, 701 # float8
+    register_decoder NumericDecoder.new, 1700 # numeric
     register_decoder DefaultDecoder.new, 705 # unknown
     register_decoder DateDecoder.new, 1082   # date
     register_decoder TimeDecoder.new, 1114   # timestamp

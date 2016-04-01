@@ -23,7 +23,8 @@ describe PG::Decoder do
   test_decode "float        ", "-0.123::float", -0.123
 
   test_decode "double prec.", "'35.03554004971999'::float8", 35.03554004971999
-  test_decode "flot prec.", "'0.10000122'::float4", 0.10000122_f32
+  test_decode "float prec.", "'0.10000122'::float4", 0.10000122_f32
+  test_decode "float unspec.", "0.10000122", 0.10000122_f64
 
   test_decode "bytea", "E'\\\\001\\\\134\\\\176'::bytea", UInt8[0o001, 0o134, 0o176]
   test_decode "bytea", "E'\\\\005\\\\000\\\\377\\\\200'::bytea", UInt8[5, 0, 255, 128]
