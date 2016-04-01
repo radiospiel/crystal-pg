@@ -17,14 +17,21 @@ module PG
         s
       end
 
-      def decode(bytes)
+      def decode(oid, bytes)
         decode_string String.new(bytes)
       end
     end
 
+    class StringDecoder < Decoder
+      def decode(oid, bytes)
+        String.new(bytes)
+      end
+    end
+
     class DefaultDecoder < Decoder
-      def decode_string(s)
-        s
+      def decode(oid, bytes)
+        warn_once "Decoding input for oid #{oid} with DefaultDecoder"
+        String.new(bytes)
       end
     end
 
@@ -55,7 +62,7 @@ module PG
     class MoneyDecoder < Decoder
       # byte swapped in the same way as int4
       def decode_string(s)
-        warn_once "converting a money value with an arbitrary resolution into a float, potentially losing accuracy"
+        warn_once "converting a money value with an arbitrary precision into a float64, potentially losing accuracy"
         s = s.gsub(/[$,]/, "")
         s.to_f64
       end
@@ -76,7 +83,7 @@ module PG
 
     class NumericDecoder < Decoder
       def decode_string(s)
-        warn_once "converting a numeric value with an arbitrary resolution into a float, potentially losing accuracy"
+        warn_once "converting a numeric value with an arbitrary precision into a float64, potentially losing accuracy"
         s.to_f
       end
     end
@@ -144,7 +151,7 @@ module PG
         end
       end
 
-      def decode(bytes)
+      def decode(oid, bytes)
         # assume "\\x", then start conversion of 2 hexchars into a single byte
         bytes += 2
         r = [] of UInt8
@@ -168,7 +175,7 @@ module PG
     end
 
     def self.decode(oid, slice)
-      @@decoders[oid].decode(slice)
+      @@decoders[oid].decode(oid, slice)
     end
 
     # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.h
@@ -177,9 +184,10 @@ module PG
     register_decoder Int8Decoder.new, 20     # int8 (bigint)
     register_decoder Int2Decoder.new, 21     # int2 (smallint)
     register_decoder IntDecoder.new, 23      # int4 (integer)
-    register_decoder DefaultDecoder.new, 25  # text
+    register_decoder StringDecoder.new, 25   # text
+
     register_decoder JsonDecoder.new, 114    # json
-    register_decoder JsonbDecoder.new, 3802  # jsonb
+    register_decoder StringDecoder.new, 142  # xml
     register_decoder Float32Decoder.new, 700 # float4
     register_decoder Float64Decoder.new, 701 # float8
     register_decoder NumericDecoder.new, 1700 # numeric
