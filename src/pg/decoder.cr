@@ -1,8 +1,6 @@
 require "json"
 
 module PG
-  alias PGValue = String | Nil | Bool | Int32 | Float32 | Float64 | Time | JSON::Type
-
   module Decoder
     abstract class Decoder
       abstract def decode(bytes)
@@ -147,14 +145,14 @@ module PG
       end
     end
 
-    @@decoders = Hash(Int32, PG::Decoder::Decoder).new(DefaultDecoder.new)
-
-    def self.from_oid(oid)
-      @@decoders[oid]
-    end
+    @@decoders = Hash(Int32, Decoder).new(DefaultDecoder.new)
 
     def self.register_decoder(decoder, oid)
       @@decoders[oid] = decoder
+    end
+
+    def self.decode(oid, slice)
+      @@decoders[oid].decode(slice)
     end
 
     # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.h

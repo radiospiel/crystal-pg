@@ -29,7 +29,9 @@ module PG
       end
     end
 
-    def initialize(conninfo : String)
+    property result_format    # either :text or :binary
+
+    def initialize(conninfo : String, @result_format = :binary)
       @conn_ptr = LibPQ.connect(conninfo)
       unless LibPQ.status(conn_ptr) == LibPQ::ConnStatusType::CONNECTION_OK
         error = ConnectionError.new(@conn_ptr)
@@ -85,7 +87,7 @@ module PG
     end
 
     def exec(types, query : String, params)
-      Result.new(types, libpq_exec(query, params))
+      Result.new(types, libpq_exec(query, params), @result_format)
     end
 
     def exec_all(query : String)
@@ -155,7 +157,6 @@ module PG
       param_values = encoded_params.map &.to_unsafe
       param_lengths = encoded_params.map &.size
       param_formats = encoded_params.map &.format
-      result_format = 1 # text vs. binary
 
       ret = LibPQ.send_query_params(
         conn_ptr,
@@ -165,7 +166,7 @@ module PG
         param_values,
         param_lengths,
         param_formats,
-        result_format
+        result_format == :text ? 0 : 1
       )
       if ret != 1
         raise Error.new(String.new(LibPQ.error_message(conn_ptr)))
